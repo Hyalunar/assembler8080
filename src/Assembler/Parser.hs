@@ -15,7 +15,7 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Void (Void)
 import Data.Word (Word8)
-import Text.Megaparsec (ParseErrorBundle, ParsecT, choice, eof, runParserT, some)
+import Text.Megaparsec (ParseErrorBundle, ParsecT, choice, eof, option, runParserT, some)
 import Text.Megaparsec.Char (alphaNumChar, char, space1)
 import Text.Megaparsec.Char.Lexer (binary, decimal, hexadecimal, octal, skipLineComment, space, symbol')
 
@@ -46,17 +46,25 @@ number =
     ]
     <* ignore
 
+number8 :: Parser Word8
+number8 = do
+  n <- number
+  if n > 255
+    then fail $ "Numeric argument out of range: " ++ show n
+    else pure $ fromIntegral n
+
 parseConst :: Parser ConstRef
 parseConst =
   choice
-    [ do
-        n <- number
-        if n > 255
-          then fail $ "Numeric argument out of range: " ++ show n
-          else pure . KnownConst $ fromIntegral n
+    [ KnownConst <$> number8
     , do
         void $ char '@'
-        LabelConst <$> ident <* ignore
+        LabelConst
+          <$> ident
+          <*> ( option 0 $ do
+                  void $ char '+'
+                  number8
+              )
     ]
 
 -- >>> program "hlt"
@@ -99,7 +107,7 @@ decl = do
   incInstCount inc p = p{offset = size inc + p.offset}
 
 ident :: Parser Text
-ident = Text.pack <$> some alphaNumChar
+ident = Text.pack <$> some alphaNumChar <* ignore
 
 instruction :: Parser Instruction
 instruction =

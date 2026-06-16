@@ -99,7 +99,7 @@ data Instruction
 
 data ConstRef
   = KnownConst Word8
-  | LabelConst Text
+  | LabelConst Text Word8
   deriving stock (Show)
 
 data BranchCond
@@ -198,7 +198,7 @@ assemble lblPos = \case
  where
   get = \case
     KnownConst w -> w
-    LabelConst n -> lblPos n
+    LabelConst n off -> off + lblPos n
 
 size :: Instruction -> Word8
 size = \case
