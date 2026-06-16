@@ -1,0 +1,21 @@
+{
+  description = "Haskell Dev Shell";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  };
+
+  outputs = { self, nixpkgs }:
+    let
+      system = "x86_64-linux"; # change if needed
+      pkgs = import nixpkgs { inherit system; };
+    in {
+      devShells.${system}.default = pkgs.mkShell {
+        packages = [
+          (pkgs.haskellPackages.ghcWithPackages (hs: with hs; [
+            stack
+          ]))
+        ];
+      };
+    };
+}
