@@ -1,0 +1,61 @@
+@outerPre:
+	lda @size
+	sta @end
+
+@outerCond:		; expects @end in the accumulator
+	cmp 0		; end reached zero?
+	jz @halt
+
+@innerPre:
+	mvi a, 0	; i = 0
+	sta @i
+@innerCond:
+	lda @end
+	dcr a
+	mvi l, @i	; i < end - 1
+	mov l, m
+	cmp l
+	jz @innerEnd
+
+@innerBody:
+	mvi a, @array
+	add l
+	mov l, a 
+	mov a, m 	; load array[i]
+	inr l		; l <- i + 1
+	cmp m		; array[i] > array[i+1]
+	jc @innerPost	; false
+	sta @temp
+	mov a, m
+	dcr l
+	mov m, a
+	lda @temp
+	inr l
+	mov m, a
+
+@innerPost:
+	lda @i
+	inr a
+	sta @i
+	jmp @innerCond
+@innerEnd:
+
+@outerPost:
+	lda @end
+	dcr a		; decrement the end
+	sta @end
+	jmp @outerCond
+
+@halt:
+	hlt
+
+; Begin of Variables
+@end: $bytes [0x00]
+@i: $bytes [0x00]
+@temp: $bytes [0x00]
+
+$offset 0x80:
+@size: $bytes [0x00] ; location of length
+
+$offset 0x81:
+@array:	$bytes [0x05 0x04 0x06 0x01] ; location of array

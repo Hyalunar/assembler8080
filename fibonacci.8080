@@ -1,0 +1,23 @@
+@start:
+	lxi sp, 0
+	mvi a, 5
+	call @rec
+	hlt
+@rec:
+	cmp 0
+	jz @return
+	cmp 1
+	jz @return
+	dcr a
+	push a
+	call @rec
+	pop l
+	push a
+	mov a, l
+	dcr a
+	call @rec
+	pop l
+	add l
+	ret
+@return:
+	ret

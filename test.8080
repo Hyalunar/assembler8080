@@ -1,0 +1,5 @@
+	mvi l, 0x80
+	mvi a, 0x01
+	cmp m
+
+$offset 0x80: $bytes [0x02]
