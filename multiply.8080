@@ -1,0 +1,28 @@
+	jmp @start 
+	nop nop nop nop nop nop nop nop nop nop nop nop nop nop
+	nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop
+	nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop
+	nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop
+@start:
+	lda 0xA1
+	mov l, a
+@loop:
+	lda 0xA0
+	cmp 0x00
+	jz @end ; end program if counter is zero
+	dcr A
+	sta 0xA0
+
+	lda 0xB1 ; load current lower sum
+	add l
+	sta 0xB1
+
+	jnc @loop ; unless carry, do it again
+
+	lda 0xB0 ; add carry to upper
+	inr A
+	sta 0xB0
+
+	jmp @loop
+@end:
+	hlt
