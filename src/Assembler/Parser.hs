@@ -114,10 +114,8 @@ instruction =
     , fmap LxiSpN $ sym "lxi" *> sym "sp" *> comma *> parseConst
     , sym "push" *> parsePush
     , sym "pop" *> parsePop
-    , InrA <$ (sym "inr" *> sym "A")
-    , InrL <$ (sym "inr" *> sym "L")
-    , DcrA <$ (sym "dcr" *> sym "A")
-    , DcrL <$ (sym "dcr" *> sym "L")
+    , sym "inr" *> choice [InrA <$ sym "A", InrL <$ sym "L"]
+    , sym "dcr" *> choice [DcrA <$ sym "A", DcrL <$ sym "L"]
     , fmap In $ sym "in" *> parseConst
     , fmap Out $ sym "out" *> parseConst
     , fmap Add $ sym "add" *> parseOpSrc
