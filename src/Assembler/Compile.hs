@@ -8,7 +8,7 @@ module Assembler.Compile (display, collectLabels, image, csv) where
 import Assembler.Instruction (Instruction)
 import qualified Assembler.Instruction as Instruction
 import Assembler.Parser (Decl (..))
-import Control.Arrow ((&&&))
+import Control.Arrow ((&&&), (***))
 import Control.Category ((>>>))
 import Control.Monad (foldM, foldM_)
 import Control.Monad.ST (runST)
@@ -16,6 +16,7 @@ import Data.Array.Base (freezeSTUArray)
 import qualified Data.Array.Base as MArray
 import Data.Array.Unboxed (UArray)
 import qualified Data.Array.Unboxed as Array
+import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Lazy as ByteString.Lazy
 import qualified Data.Foldable as Foldable
@@ -74,30 +75,39 @@ collectLabels = snd . foldl' step (0, Map.empty)
     DeclOffset newO -> (newO, labels)
     DeclLabel name -> (off, Map.insert name off labels)
     DeclInst i -> (off + Instruction.size i, labels)
+    DeclBytes bs -> (off + fromIntegral (ByteString.length bs), labels)
 
-image :: (Foldable f) => f Decl -> UArray Word8 Word8
+image :: (Foldable f) => f Decl -> (UArray Word8 Word8, UArray Word8 Bool)
 image decls = runST $ do
   rom <- MArray.newArray (minBound, maxBound) 0x00
+  isSet <- MArray.newArray (minBound, maxBound) False
 
   let consumeDecl off = \case
         DeclOffset newOff -> pure newOff
         DeclLabel _ -> pure off
+        DeclBytes bs -> do
+          foldM writeByte off $ ByteString.unpack bs
         DeclInst inst ->
           let
             bytes = ByteString.Lazy.unpack . Builder.toLazyByteString . Instruction.assemble labelLookup $ inst
-            writeInst pos byte = do
-              MArray.writeArray rom pos byte
-              pure $ succ pos
            in
-            foldM writeInst off bytes
+            foldM writeByte off bytes
+       where
+        writeByte pos byte = do
+          MArray.writeArray rom pos byte
+          MArray.writeArray isSet pos True
+          pure $ succ pos
   foldM_ consumeDecl 0 decls
-  freezeSTUArray rom
+  rom' <- freezeSTUArray rom
+  isSet' <- freezeSTUArray isSet
+  pure (rom', isSet')
  where
   labelLookup = (collectLabels decls Map.!)
 
 csv :: (Foldable f) => f Decl -> Text
 csv =
   image
-    >>> Array.elems
-    >>> fmap hex
+    >>> (Array.elems *** Array.elems)
+    >>> uncurry zip
+    >>> fmap (\(b, set) -> if set then hex b else Text.empty)
     >>> Text.intercalate ","

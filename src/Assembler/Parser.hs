@@ -6,6 +6,8 @@ module Assembler.Parser (program, Decl (..)) where
 import Assembler.Instruction (BranchCond (BranchCondFlag, BranchUncond), BranchFlag (..), ConstRef (..), FlagCond (..), Instruction (..), OpSrc (..))
 import Control.Applicative (Alternative (empty, many))
 import Control.Monad (void)
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as ByteString
 import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 import Data.Text (Text)
@@ -22,6 +24,7 @@ data Decl
   = DeclLabel Text
   | DeclOffset Word8
   | DeclInst Instruction
+  | DeclBytes ByteString
 
 ignore :: Parser ()
 ignore = space space1 (skipLineComment ";") empty
@@ -78,11 +81,17 @@ decl =
     [ DeclInst <$> instruction
     , DeclLabel <$> label
     , DeclOffset <$> offset
+    , DeclBytes <$> bytes
     ]
  where
+  bytes = do
+    sym "$bytes"
+    sym "["
+    bs <- ByteString.pack <$> some number8
+    sym "]"
+    pure bs
   offset = do
-    void $ char '$'
-    sym "offset"
+    sym "$offset"
     off <- number8
     sym ":"
     pure off
