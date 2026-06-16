@@ -1,31 +1,27 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Assembler.Parser (program) where
+module Assembler.Parser (program, Decl (..)) where
 
-import Assembler.Instruction (BranchCond (BranchCondFlag, BranchUncond), BranchFlag (..), ConstRef (..), FlagCond (..), Instruction (..), OpSrc (..), size)
+import Assembler.Instruction (BranchCond (BranchCondFlag, BranchUncond), BranchFlag (..), ConstRef (..), FlagCond (..), Instruction (..), OpSrc (..))
 import Control.Applicative (Alternative (empty, many))
-import Control.Monad (void, when)
-import Control.Monad.State (MonadTrans (lift), State, gets, modify, runState)
-import Data.Map (Map)
-import qualified Data.Map as Map
+import Control.Monad (void)
 import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Void (Void)
 import Data.Word (Word8)
-import Text.Megaparsec (ParseErrorBundle, ParsecT, choice, eof, option, runParserT, some)
+import Text.Megaparsec (ParseErrorBundle, Parsec, choice, eof, option, runParser, some)
 import Text.Megaparsec.Char (alphaNumChar, char, space1)
 import Text.Megaparsec.Char.Lexer (binary, decimal, hexadecimal, octal, skipLineComment, space, symbol')
 
-type Parser = ParsecT Void Text (State ParserState)
+type Parser = Parsec Void Text
 
-data ParserState
-  = ParserState
-  { offset :: Word8
-  , labels :: Map Text Word8 -- name to offset
-  }
+data Decl
+  = DeclLabel Text
+  | DeclOffset Word8
+  | DeclInst Instruction
 
 ignore :: Parser ()
 ignore = space space1 (skipLineComment ";") empty
@@ -70,41 +66,31 @@ parseConst =
 -- >>> program "hlt"
 -- (Right (fromList [Halt]),fromList [])
 
-program :: Text -> (Either (ParseErrorBundle Text Void) (Seq Instruction), Map Text Word8)
-program source =
-  let
-    initialState =
-      ParserState
-        { offset = 0
-        , labels = mempty
-        }
-   in
-    labels <$> runState (runParserT file "<input>" source) initialState
+program :: Text -> Either (ParseErrorBundle Text Void) (Seq Decl)
+program source = runParser file "<input>" source
 
-file :: Parser (Seq Instruction)
+file :: Parser (Seq Decl)
 file = fmap Seq.fromList $ ignore *> many decl <* eof
 
-decl :: Parser Instruction
-decl = do
-  inst <- instruction
-  lift (modify $ incInstCount inst)
-  void $ many $ label
-  pure inst
+decl :: Parser Decl
+decl =
+  choice
+    [ DeclInst <$> instruction
+    , DeclLabel <$> label
+    , DeclOffset <$> offset
+    ]
  where
+  offset = do
+    void $ char '$'
+    sym "offset"
+    off <- number8
+    sym ":"
+    pure off
   label = do
     void $ char '@'
     name <- ident
     sym ":"
-
-    -- check for duplicates
-    alreadyDefined <- Map.member name <$> gets labels
-    when alreadyDefined . fail $ "Label is defined twice: " ++ show name
-
-    -- register new label
-    pos <- gets offset
-    lift $ modify $ addLabel pos name
-  addLabel p n s = s{labels = Map.insert n p s.labels}
-  incInstCount inc p = p{offset = size inc + p.offset}
+    pure name
 
 ident :: Parser Text
 ident = Text.pack <$> some alphaNumChar <* ignore

@@ -20,12 +20,14 @@ extra-source-files:
 description:         No description.
 
 dependencies:
+- array
 - base >= 4.7 && < 5
 - bytestring
 - containers
-- mtl
-- text
 - megaparsec
+- mtl
+- optparse-applicative
+- text
 
 ghc-options:
 - -Wall

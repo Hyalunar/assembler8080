@@ -1,8 +1,6 @@
 	jmp @start 
-	nop nop nop nop nop nop nop nop nop nop nop nop nop nop
-	nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop
-	nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop
-	nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop nop
+
+$offset 0x40:
 @start:
 	lda 0xA1
 	mov l, a
