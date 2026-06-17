@@ -53,8 +53,8 @@ run = do
       decls <- programOrDie source
       IO.putStrLn $ csv decls
     UnCsv -> do
-      decls <- eitherDieOr $ uncsv source
-      Lazy.IO.putStrLn $ LazyText.Builder.toLazyText $ prettyProgram decls
+      decls <- eitherDieOr $ uncsv (Text.strip source)
+      Lazy.IO.putStr $ LazyText.Builder.toLazyText $ prettyProgram decls
     Annotate -> do
       decls <- programOrDie source
       Lazy.IO.putStrLn $ LazyText.Builder.toLazyText $ annotateProgram decls
