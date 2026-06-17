@@ -11,12 +11,18 @@ module Assembler.Instruction (
   ConstRef (..),
   assemble,
   size,
+  disassemble,
+  unparse,
 ) where
 
 import Data.ByteString.Builder (Builder)
 import qualified Data.ByteString.Builder as Builder
 import Data.Text (Text)
+import qualified Data.Text as Text
+import Data.Text.Lazy.Builder (LazyTextBuilder)
+import qualified Data.Text.Lazy.Builder as Text.Lazy.Builder
 import Data.Word (Word8)
+import Data.Word8 (prettyHex)
 
 data Instruction
   = -- \* transfer instructions
@@ -131,6 +137,72 @@ data OpSrc
   | -- | use constant value
     OpSrcConst ConstRef
   deriving stock (Show)
+
+disassemble :: [Word8] -> Maybe (Instruction, [Word8])
+disassemble = \case
+  [] -> Nothing
+  0x7D : rest -> Just (MovAL, rest)
+  0x7E : rest -> Just (MovAM, rest)
+  0x77 : rest -> Just (MovMA, rest)
+  0x3E : n : rest -> Just (MviAN $ KnownConst n, rest)
+  0x3A : a : rest -> Just (LoadA $ KnownConst a, rest)
+  0x32 : a : rest -> Just (StoreA $ KnownConst a, rest)
+  0x6F : rest -> Just (MovLA, rest)
+  0x6E : rest -> Just (MovLM, rest)
+  0x2E : n : rest -> Just (MviLN $ KnownConst n, rest)
+  0x31 : n : rest -> Just (LxiSpN $ KnownConst n, rest)
+  0xF5 : rest -> Just (PushA, rest)
+  0xE5 : rest -> Just (PushL, rest)
+  0xED : rest -> Just (PushFL, rest)
+  0xF1 : rest -> Just (PopA, rest)
+  0xE1 : rest -> Just (PopL, rest)
+  0xFD : rest -> Just (PopFL, rest)
+  0xDB : a : rest -> Just (In $ KnownConst a, rest)
+  0xD3 : a : rest -> Just (Out $ KnownConst a, rest)
+  0x3C : rest -> Just (InrA, rest)
+  0x2C : rest -> Just (InrL, rest)
+  0x3D : rest -> Just (DcrA, rest)
+  0x2D : rest -> Just (DcrL, rest)
+  0x85 : rest -> Just (Add OpSrcReg, rest)
+  0x86 : rest -> Just (Add OpSrcMem, rest)
+  0x87 : rest -> Just (Add OpSrcAccu, rest)
+  0xC6 : n : rest -> Just (Add $ OpSrcConst $ KnownConst n, rest)
+  0x95 : rest -> Just (Sub OpSrcReg, rest)
+  0x96 : rest -> Just (Sub OpSrcMem, rest)
+  0x97 : rest -> Just (Sub OpSrcAccu, rest)
+  0xD6 : n : rest -> Just (Sub $ OpSrcConst $ KnownConst n, rest)
+  0xBD : rest -> Just (Cmp OpSrcReg, rest)
+  0xBE : rest -> Just (Cmp OpSrcMem, rest)
+  0xBF : rest -> Just (Cmp OpSrcAccu, rest)
+  0xFE : n : rest -> Just (Cmp $ OpSrcConst $ KnownConst n, rest)
+  0xA5 : rest -> Just (And OpSrcReg, rest)
+  0xA6 : rest -> Just (And OpSrcMem, rest)
+  0xA7 : rest -> Just (And OpSrcAccu, rest)
+  0xE6 : n : rest -> Just (And $ OpSrcConst $ KnownConst n, rest)
+  0xB5 : rest -> Just (Or OpSrcReg, rest)
+  0xB6 : rest -> Just (Or OpSrcMem, rest)
+  0xB7 : rest -> Just (Or OpSrcAccu, rest)
+  0xF6 : n : rest -> Just (Or $ OpSrcConst $ KnownConst n, rest)
+  0xAD : rest -> Just (Xor OpSrcReg, rest)
+  0xAE : rest -> Just (Xor OpSrcMem, rest)
+  0xAF : rest -> Just (Xor OpSrcAccu, rest)
+  0xEE : n : rest -> Just (Xor $ OpSrcConst $ KnownConst n, rest)
+  0xC3 : a : rest -> Just (Jump BranchUncond $ KnownConst a, rest)
+  0xCA : a : rest -> Just (Jump (BranchCondFlag BranchFlagZero FlagCondSet) $ KnownConst a, rest)
+  0xC2 : a : rest -> Just (Jump (BranchCondFlag BranchFlagZero FlagCondUnset) $ KnownConst a, rest)
+  0xDA : a : rest -> Just (Jump (BranchCondFlag BranchFlagCarry FlagCondSet) $ KnownConst a, rest)
+  0xD2 : a : rest -> Just (Jump (BranchCondFlag BranchFlagCarry FlagCondUnset) $ KnownConst a, rest)
+  0xCD : a : rest -> Just (Call BranchUncond $ KnownConst a, rest)
+  0xCC : a : rest -> Just (Call (BranchCondFlag BranchFlagZero FlagCondSet) $ KnownConst a, rest)
+  0xC4 : a : rest -> Just (Call (BranchCondFlag BranchFlagZero FlagCondUnset) $ KnownConst a, rest)
+  0xDC : a : rest -> Just (Call (BranchCondFlag BranchFlagCarry FlagCondSet) $ KnownConst a, rest)
+  0xD4 : a : rest -> Just (Call (BranchCondFlag BranchFlagCarry FlagCondUnset) $ KnownConst a, rest)
+  0xC9 : rest -> Just (Ret, rest)
+  0x76 : rest -> Just (Halt, rest)
+  0x00 : rest -> Just (Nop, rest)
+  0xFB : rest -> Just (EnableI, rest)
+  0xF3 : rest -> Just (DisableI, rest)
+  _ -> Nothing
 
 assemble :: (Text -> Word8) -> Instruction -> Builder
 assemble lblPos = \case
@@ -263,3 +335,78 @@ size = \case
   Nop -> 1
   EnableI -> 1
   DisableI -> 1
+
+unparse :: Instruction -> LazyTextBuilder
+unparse = \case
+  MovAL -> "mov a, l"
+  MovAM -> "mov a, m"
+  MovMA -> "mov m, a"
+  MviAN c -> "mvi a, " <> unparseConstRef c
+  LoadA c -> "lda " <> unparseConstRef c
+  StoreA c -> "sta " <> unparseConstRef c
+  MovLA -> "mov l, a"
+  MovLM -> "mov l, m"
+  MviLN c -> "mvi l, " <> unparseConstRef c
+  LxiSpN c -> "lxi sp, " <> unparseConstRef c
+  PushA -> "push a"
+  PushL -> "push l"
+  PushFL -> "push fl"
+  PopA -> "pop a"
+  PopL -> "pop l"
+  PopFL -> "pop fl"
+  In c -> "in " <> unparseConstRef c
+  Out c -> "out " <> unparseConstRef c
+  InrA -> "inr a"
+  InrL -> "inr l"
+  DcrA -> "dcr a"
+  DcrL -> "dcr l"
+  Add OpSrcReg -> "add l"
+  Add OpSrcMem -> "add m"
+  Add OpSrcAccu -> "add a"
+  Add (OpSrcConst c) -> "add " <> unparseConstRef c
+  Sub OpSrcReg -> "sub l"
+  Sub OpSrcMem -> "sub m"
+  Sub OpSrcAccu -> "sub a"
+  Sub (OpSrcConst c) -> "sub " <> unparseConstRef c
+  Cmp OpSrcReg -> "cmp l"
+  Cmp OpSrcMem -> "cmp m"
+  Cmp OpSrcAccu -> "cmp a"
+  Cmp (OpSrcConst c) -> "cmp " <> unparseConstRef c
+  And OpSrcReg -> "and l"
+  And OpSrcMem -> "and m"
+  And OpSrcAccu -> "and a"
+  And (OpSrcConst c) -> "and " <> unparseConstRef c
+  Or OpSrcReg -> "or l"
+  Or OpSrcMem -> "or m"
+  Or OpSrcAccu -> "or a"
+  Or (OpSrcConst c) -> "or " <> unparseConstRef c
+  Xor OpSrcReg -> "xor l"
+  Xor OpSrcMem -> "xor m"
+  Xor OpSrcAccu -> "xor a"
+  Xor (OpSrcConst c) -> "xor " <> unparseConstRef c
+  Jump BranchUncond c -> "jmp " <> unparseConstRef c
+  Jump (BranchCondFlag BranchFlagZero FlagCondSet) c -> "jz " <> unparseConstRef c
+  Jump (BranchCondFlag BranchFlagZero FlagCondUnset) c -> "jnz " <> unparseConstRef c
+  Jump (BranchCondFlag BranchFlagCarry FlagCondSet) c -> "jc " <> unparseConstRef c
+  Jump (BranchCondFlag BranchFlagCarry FlagCondUnset) c -> "jnc " <> unparseConstRef c
+  Call BranchUncond c -> "call " <> unparseConstRef c
+  Call (BranchCondFlag BranchFlagZero FlagCondSet) c -> "cz " <> unparseConstRef c
+  Call (BranchCondFlag BranchFlagZero FlagCondUnset) c -> "cnz " <> unparseConstRef c
+  Call (BranchCondFlag BranchFlagCarry FlagCondSet) c -> "cc " <> unparseConstRef c
+  Call (BranchCondFlag BranchFlagCarry FlagCondUnset) c -> "cnc " <> unparseConstRef c
+  Ret -> "ret"
+  Halt -> "hlt"
+  Nop -> "nop"
+  EnableI -> "ei"
+  DisableI -> "di"
+
+unparseConstRef :: ConstRef -> LazyTextBuilder
+unparseConstRef = \case
+  KnownConst w -> prettyHex w
+  LabelConst name off ->
+    mconcat
+      [ "@"
+      , Text.Lazy.Builder.fromText name
+      , "+"
+      , Text.Lazy.Builder.fromText $ Text.show off
+      ]

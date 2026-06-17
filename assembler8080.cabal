@@ -27,6 +27,7 @@ library
       Assembler.Instruction
       Assembler.Parser
       Assembler.Run
+      Data.Word8
   other-modules:
       Paths_assembler8080
   hs-source-dirs:

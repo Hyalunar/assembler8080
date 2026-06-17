@@ -1,19 +1,25 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Assembler.Parser (program, Decl (..)) where
+module Assembler.Parser (program, Decl (..), prettyDecl) where
 
 import Assembler.Instruction (BranchCond (BranchCondFlag, BranchUncond), BranchFlag (..), ConstRef (..), FlagCond (..), Instruction (..), OpSrc (..))
+import qualified Assembler.Instruction as Instruction
 import Control.Applicative (Alternative (empty, many))
 import Control.Monad (void)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
+import qualified Data.List as List
 import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Data.Text.Lazy.Builder (LazyTextBuilder)
+import qualified Data.Text.Lazy.Builder as LazyTextBuilder
 import Data.Void (Void)
 import Data.Word (Word8)
+import Data.Word8 (prettyHex)
 import Text.Megaparsec (ParseErrorBundle, Parsec, choice, eof, option, runParser, some)
 import Text.Megaparsec.Char (alphaNumChar, char, space1)
 import Text.Megaparsec.Char.Lexer (binary, decimal, hexadecimal, octal, skipLineComment, space, symbol')
@@ -103,6 +109,18 @@ decl =
 
 ident :: Parser Text
 ident = Text.pack <$> some alphaNumChar <* ignore
+
+prettyDecl :: Decl -> LazyTextBuilder
+prettyDecl = \case
+  DeclOffset o ->
+    mconcat
+      [ "$offset "
+      , prettyHex o
+      , ":"
+      ]
+  DeclLabel n -> mconcat ["@", LazyTextBuilder.fromText n, ":"]
+  DeclInst inst -> "\t" <> Instruction.unparse inst
+  DeclBytes bytes -> "$bytes [" <> mconcat (List.intersperse " " $ fmap prettyHex $ ByteString.unpack bytes) <> "]"
 
 instruction :: Parser Instruction
 instruction =
