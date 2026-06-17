@@ -4,7 +4,7 @@
 	call @rec
 	hlt
 @rec:
-	cmp 1
+	cmp 2 ; less than two
 	jc @return
 	dcr a
 	push a
