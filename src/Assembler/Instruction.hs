@@ -271,7 +271,7 @@ assemble lblPos = \case
   get = \case
     KnownConst w -> Right w
     LabelConst n off -> case lblPos n of
-      Nothing -> Left n
+      Nothing -> Left $ "Label " <> n <> " is referenced but never defined"
       Just pos -> Right $ pos + off
 
 foldMapM :: (Monoid m, Traversable t, Monad f) => (a -> m) -> t (f a) -> f m
