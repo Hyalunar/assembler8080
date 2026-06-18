@@ -5,12 +5,10 @@
 
 module Assembler.Parser (program, Decl (..), prettyDecl) where
 
-import Assembler.Instruction (BranchCond (BranchCondFlag, BranchUncond), BranchFlag (..), ConstRef (..), FlagCond (..), Instruction (..), OpSrc (..))
+import Assembler.Instruction (BranchCond (BranchCondFlag, BranchUncond), BranchFlag (..), ConstRef (..), FlagCond (..), Instruction (..), OpSrc (..), unparseConstRef)
 import qualified Assembler.Instruction as Instruction
 import Control.Applicative (Alternative (empty, many))
 import Control.Monad (void)
-import Data.ByteString (ByteString)
-import qualified Data.ByteString as ByteString
 import qualified Data.Char as Char
 import qualified Data.List as List
 import Data.Sequence (Seq)
@@ -32,7 +30,7 @@ data Decl
   = DeclLabel Text
   | DeclOffset Word8
   | DeclInst Instruction
-  | DeclBytes ByteString
+  | DeclBytes [ConstRef]
   deriving stock (Show)
 
 ignore :: Parser ()
@@ -97,7 +95,7 @@ decl =
   bytes = do
     sym "$bytes"
     sym "["
-    bs <- ByteString.pack <$> some number8
+    bs <- some parseConst
     sym "]"
     pure bs
   offset = do
@@ -124,7 +122,7 @@ prettyDecl = \case
       ]
   DeclLabel n -> mconcat ["@", LazyTextBuilder.fromText n, ":"]
   DeclInst inst -> "\t" <> Instruction.unparse inst
-  DeclBytes bytes -> "$bytes [" <> mconcat (List.intersperse " " $ fmap prettyHex $ ByteString.unpack bytes) <> "]"
+  DeclBytes bytes -> "$bytes [" <> mconcat (List.intersperse " " $ unparseConstRef <$> bytes) <> "]"
 
 instruction :: Parser Instruction
 instruction =

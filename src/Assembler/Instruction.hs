@@ -13,6 +13,8 @@ module Assembler.Instruction (
   size,
   disassemble,
   unparse,
+  unparseConstRef,
+  resolveConstRef,
 ) where
 
 import Data.ByteString.Builder (Builder)
@@ -268,11 +270,14 @@ assemble lblPos = \case
   EnableI -> Right $ Builder.word8 0xFB
   DisableI -> Right $ Builder.word8 0xF3
  where
-  get = \case
-    KnownConst w -> Right w
-    LabelConst n off -> case lblPos n of
-      Nothing -> Left $ "Label \"@" <> n <> "\" is referenced but never defined"
-      Just pos -> Right $ pos + off
+  get = resolveConstRef lblPos
+
+resolveConstRef :: (Text -> Maybe Word8) -> ConstRef -> Either Text Word8
+resolveConstRef lblPos = \case
+  KnownConst w -> Right w
+  LabelConst n off -> case lblPos n of
+    Nothing -> Left $ "Label \"@" <> n <> "\" is referenced but never defined"
+    Just pos -> Right $ pos + off
 
 foldMapM :: (Monoid m, Traversable t, Monad f) => (a -> m) -> t (f a) -> f m
 foldMapM f = fmap (foldMap f) . sequence

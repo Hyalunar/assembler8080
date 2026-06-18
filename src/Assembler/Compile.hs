@@ -6,6 +6,7 @@
 
 module Assembler.Compile (collectLabels, image, csv, uncsv) where
 
+import Assembler.Instruction (ConstRef (KnownConst), resolveConstRef)
 import qualified Assembler.Instruction as Instruction
 import Assembler.Parser (Decl (..))
 import Control.Arrow ((***))
@@ -18,7 +19,6 @@ import Data.Array.Base (STUArray, freezeSTUArray)
 import qualified Data.Array.Base as MArray
 import Data.Array.Unboxed (UArray)
 import qualified Data.Array.Unboxed as Array
-import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Lazy as ByteString.Lazy
 import Data.List (genericLength)
@@ -36,7 +36,7 @@ collectLabels = snd . foldl' step (0, Map.empty)
     DeclOffset newO -> (newO, labels)
     DeclLabel name -> (off, Map.insert name off labels)
     DeclInst i -> (off + Instruction.size i, labels)
-    DeclBytes bs -> (off + fromIntegral (ByteString.length bs), labels)
+    DeclBytes bs -> (off + genericLength bs, labels)
 
 writeSTUArray :: (MArray.MArray (STUArray s) e (ST s), Array.Ix i) => STUArray s i e -> i -> e -> ST s ()
 writeSTUArray = MArray.writeArray
@@ -50,8 +50,9 @@ image decls = runST $ runExceptT $ do
     consumeDecl off = \case
       DeclOffset newOff -> pure newOff
       DeclLabel _ -> pure off
-      DeclBytes bs -> do
-        foldM writeByte off $ ByteString.unpack bs
+      DeclBytes cs -> do
+        word8s <- liftEither $ mapM (resolveConstRef labelLookup) cs
+        foldM writeByte off $ word8s
       DeclInst inst -> do
         bytes <- ByteString.Lazy.unpack . Builder.toLazyByteString <$> liftEither (Instruction.assemble labelLookup inst)
         foldM writeByte off bytes
@@ -117,5 +118,5 @@ uncsv src = runExcept $ do
       | Just (inst, rest) <- Instruction.disassemble bytes =
           DeclInst inst : parseBytes rest
       | byte : rest <- bytes =
-          DeclBytes (ByteString.singleton byte) : parseBytes rest
+          DeclBytes [KnownConst byte] : parseBytes rest
       | [] <- bytes = []
