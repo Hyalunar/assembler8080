@@ -51,37 +51,38 @@ run = do
   case opts of
     Csv -> do
       decls <- programOrDie source
-      IO.putStrLn $ csv decls
+      IO.putStrLn =<< eitherDieOr (csv decls)
     UnCsv -> do
       decls <- eitherDieOr $ uncsv (Text.strip source)
       Lazy.IO.putStr $ LazyText.Builder.toLazyText $ prettyProgram decls
     Annotate -> do
       decls <- programOrDie source
-      Lazy.IO.putStrLn $ LazyText.Builder.toLazyText $ annotateProgram decls
+      annotatedSource <- eitherDieOr $ annotateProgram decls
+      Lazy.IO.putStrLn $ LazyText.Builder.toLazyText $ annotatedSource
 
-annotateProgram :: Seq Decl -> LazyText.Builder.Builder
-annotateProgram decls = mconcat . List.intersperse "\n" . fmap annotateDecl . Foldable.toList $ decls
+annotateProgram :: Seq Decl -> Either Text LazyText.Builder.Builder
+annotateProgram decls = fmap (mconcat . List.intersperse "\n") . traverse annotateDecl . Foldable.toList $ decls
  where
   labels = collectLabels decls
-  annotateDecl :: Decl -> LazyText.Builder.Builder
+  annotateDecl :: Decl -> Either Text LazyText.Builder.Builder
   annotateDecl = \case
-    DeclInst inst ->
-      let
-        assemblyBytes =
-          const inst
-            >>> Instruction.assemble (labels Map.!)
-            >>> ByteString.Builder.toLazyByteString
-            >>> ByteString.Lazy.unpack
-            >>> fmap (LazyText.Builder.fromText . Word8.hex)
-            >>> mconcat
-            $ ()
-       in
+    DeclInst inst -> do
+      bytes <-
+        Instruction.assemble
+          (labels Map.!?)
+          inst
+      pure $
         mconcat
-          [ assemblyBytes
+          [ const bytes
+              >>> ByteString.Builder.toLazyByteString
+              >>> ByteString.Lazy.unpack
+              >>> fmap (LazyText.Builder.fromText . Word8.hex)
+              >>> mconcat
+              $ ()
           , ":"
           , prettyDecl $ DeclInst inst
           ]
-    decl -> prettyDecl decl
+    decl -> pure $ prettyDecl decl
 
 prettyProgram :: [Decl] -> LazyTextBuilder
 prettyProgram = mconcat . List.intersperse "\n" . fmap prettyDecl

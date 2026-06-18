@@ -2,6 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE Rank2Types #-}
 
 module Assembler.Compile (collectLabels, image, csv, uncsv) where
 
@@ -10,9 +11,10 @@ import Assembler.Parser (Decl (..))
 import Control.Arrow ((***))
 import Control.Category ((>>>))
 import Control.Monad (foldM, foldM_, unless)
-import Control.Monad.Except (MonadError (throwError), liftEither, runExcept)
-import Control.Monad.ST (runST)
-import Data.Array.Base (freezeSTUArray)
+import Control.Monad.Except (MonadError (throwError), liftEither, runExcept, runExceptT)
+import Control.Monad.ST (ST, runST)
+import Control.Monad.Trans (lift)
+import Data.Array.Base (STUArray, freezeSTUArray)
 import qualified Data.Array.Base as MArray
 import Data.Array.Unboxed (UArray)
 import qualified Data.Array.Unboxed as Array
@@ -36,40 +38,45 @@ collectLabels = snd . foldl' step (0, Map.empty)
     DeclInst i -> (off + Instruction.size i, labels)
     DeclBytes bs -> (off + fromIntegral (ByteString.length bs), labels)
 
-image :: (Foldable f) => f Decl -> (UArray Word8 Word8, UArray Word8 Bool)
-image decls = runST $ do
-  rom <- MArray.newArray (minBound, maxBound) 0x00
-  isSet <- MArray.newArray (minBound, maxBound) False
+writeSTUArray :: (MArray.MArray (STUArray s) e (ST s), Array.Ix i) => STUArray s i e -> i -> e -> ST s ()
+writeSTUArray = MArray.writeArray
 
-  let consumeDecl off = \case
-        DeclOffset newOff -> pure newOff
-        DeclLabel _ -> pure off
-        DeclBytes bs -> do
-          foldM writeByte off $ ByteString.unpack bs
-        DeclInst inst ->
-          let
-            bytes = ByteString.Lazy.unpack . Builder.toLazyByteString . Instruction.assemble labelLookup $ inst
-           in
-            foldM writeByte off bytes
-       where
-        writeByte pos byte = do
-          MArray.writeArray rom pos byte
-          MArray.writeArray isSet pos True
-          pure $ succ pos
+image :: (Foldable f) => f Decl -> Either Text (UArray Word8 Word8, UArray Word8 Bool)
+image decls = runST $ runExceptT $ do
+  rom <- lift $ MArray.newArray (minBound, maxBound) 0x00
+  isSet <- lift $ MArray.newArray (minBound, maxBound) False
+
+  let
+    consumeDecl off = \case
+      DeclOffset newOff -> pure newOff
+      DeclLabel _ -> pure off
+      DeclBytes bs -> do
+        foldM writeByte off $ ByteString.unpack bs
+      DeclInst inst -> do
+        bytes <- ByteString.Lazy.unpack . Builder.toLazyByteString <$> liftEither (Instruction.assemble labelLookup inst)
+        foldM writeByte off bytes
+     where
+      writeByte pos byte = do
+        lift $ writeSTUArray rom pos byte
+        lift $ MArray.writeArray isSet pos True
+        pure $ succ pos
   foldM_ consumeDecl 0 decls
-  rom' <- freezeSTUArray rom
-  isSet' <- freezeSTUArray isSet
+  rom' <- lift $ freezeSTUArray rom
+  isSet' <- lift $ freezeSTUArray isSet
   pure (rom', isSet')
  where
-  labelLookup = (collectLabels decls Map.!)
+  labelLookup = (collectLabels decls Map.!?)
 
-csv :: (Foldable f) => f Decl -> Text
-csv =
-  image
-    >>> (Array.elems *** Array.elems)
-    >>> uncurry zip
-    >>> fmap (\(b, set) -> if set then Word8.hex b else Text.empty)
-    >>> Text.intercalate ","
+csv :: (Foldable f) => f Decl -> Either Text Text
+csv decls = do
+  img <- image decls
+  pure
+    $ const img
+      >>> (Array.elems *** Array.elems)
+      >>> uncurry zip
+      >>> fmap (\(b, set) -> if set then Word8.hex b else Text.empty)
+      >>> Text.intercalate ","
+    $ ()
 
 uncsv :: Text -> Either Text [Decl]
 uncsv src = runExcept $ do

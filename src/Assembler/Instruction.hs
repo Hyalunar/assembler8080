@@ -204,73 +204,78 @@ disassemble = \case
   0xF3 : rest -> Just (DisableI, rest)
   _ -> Nothing
 
-assemble :: (Text -> Word8) -> Instruction -> Builder
+assemble :: (Text -> Maybe Word8) -> Instruction -> Either Text Builder
 assemble lblPos = \case
-  MovAL -> Builder.word8 0x7D
-  MovAM -> Builder.word8 0x7E
-  MovMA -> Builder.word8 0x77
-  MviAN n -> Builder.word8 0x3E <> Builder.word8 (get n)
-  LoadA a -> Builder.word8 0x3A <> Builder.word8 (get a)
-  StoreA a -> Builder.word8 0x32 <> Builder.word8 (get a)
-  MovLA -> Builder.word8 0x6F
-  MovLM -> Builder.word8 0x6E
-  MviLN n -> Builder.word8 0x2E <> Builder.word8 (get n)
-  LxiSpN n -> Builder.word8 0x31 <> Builder.word8 (get n)
-  PushA -> Builder.word8 0xF5
-  PushL -> Builder.word8 0xE5
-  PushFL -> Builder.word8 0xED
-  PopA -> Builder.word8 0xF1
-  PopL -> Builder.word8 0xE1
-  PopFL -> Builder.word8 0xFD
-  In a -> Builder.word8 0xDB <> Builder.word8 (get a)
-  Out a -> Builder.word8 0xD3 <> Builder.word8 (get a)
-  InrA -> Builder.word8 0x3C
-  InrL -> Builder.word8 0x2C
-  DcrA -> Builder.word8 0x3D
-  DcrL -> Builder.word8 0x2D
-  Add OpSrcReg -> Builder.word8 0x85
-  Add OpSrcMem -> Builder.word8 0x86
-  Add OpSrcAccu -> Builder.word8 0x87
-  Add (OpSrcConst n) -> Builder.word8 0xC6 <> Builder.word8 (get n)
-  Sub OpSrcReg -> Builder.word8 0x95
-  Sub OpSrcMem -> Builder.word8 0x96
-  Sub OpSrcAccu -> Builder.word8 0x97
-  Sub (OpSrcConst n) -> Builder.word8 0xD6 <> Builder.word8 (get n)
-  Cmp OpSrcReg -> Builder.word8 0xBD
-  Cmp OpSrcMem -> Builder.word8 0xBE
-  Cmp OpSrcAccu -> Builder.word8 0xBF
-  Cmp (OpSrcConst n) -> Builder.word8 0xFE <> Builder.word8 (get n)
-  And OpSrcReg -> Builder.word8 0xA5
-  And OpSrcMem -> Builder.word8 0xA6
-  And OpSrcAccu -> Builder.word8 0xA7
-  And (OpSrcConst n) -> Builder.word8 0xE6 <> Builder.word8 (get n)
-  Or OpSrcReg -> Builder.word8 0xB5
-  Or OpSrcMem -> Builder.word8 0xB6
-  Or OpSrcAccu -> Builder.word8 0xB7
-  Or (OpSrcConst n) -> Builder.word8 0xF6 <> Builder.word8 (get n)
-  Xor OpSrcReg -> Builder.word8 0xAD
-  Xor OpSrcMem -> Builder.word8 0xAE
-  Xor OpSrcAccu -> Builder.word8 0xAF
-  Xor (OpSrcConst n) -> Builder.word8 0xEE <> Builder.word8 (get n)
-  Jump BranchUncond a -> Builder.word8 0xC3 <> Builder.word8 (get a)
-  Jump (BranchCondFlag BranchFlagZero FlagCondSet) a -> Builder.word8 0xCA <> Builder.word8 (get a)
-  Jump (BranchCondFlag BranchFlagZero FlagCondUnset) a -> Builder.word8 0xC2 <> Builder.word8 (get a)
-  Jump (BranchCondFlag BranchFlagCarry FlagCondSet) a -> Builder.word8 0xDA <> Builder.word8 (get a)
-  Jump (BranchCondFlag BranchFlagCarry FlagCondUnset) a -> Builder.word8 0xD2 <> Builder.word8 (get a)
-  Call BranchUncond a -> Builder.word8 0xCD <> Builder.word8 (get a)
-  Call (BranchCondFlag BranchFlagZero FlagCondSet) a -> Builder.word8 0xCC <> Builder.word8 (get a)
-  Call (BranchCondFlag BranchFlagZero FlagCondUnset) a -> Builder.word8 0xC4 <> Builder.word8 (get a)
-  Call (BranchCondFlag BranchFlagCarry FlagCondSet) a -> Builder.word8 0xDC <> Builder.word8 (get a)
-  Call (BranchCondFlag BranchFlagCarry FlagCondUnset) a -> Builder.word8 0xD4 <> Builder.word8 (get a)
-  Ret -> Builder.word8 0xC9
-  Halt -> Builder.word8 0x76
-  Nop -> Builder.word8 0x00
-  EnableI -> Builder.word8 0xFB
-  DisableI -> Builder.word8 0xF3
+  MovAL -> Right $ Builder.word8 0x7D
+  MovAM -> Right $ Builder.word8 0x7E
+  MovMA -> Right $ Builder.word8 0x77
+  MviAN n -> foldMapM Builder.word8 $ [Right 0x3E, get n]
+  LoadA a -> foldMapM Builder.word8 $ [Right 0x3A, get a]
+  StoreA a -> foldMapM Builder.word8 $ [Right 0x32, get a]
+  MovLA -> Right $ Builder.word8 0x6F
+  MovLM -> Right $ Builder.word8 0x6E
+  MviLN n -> foldMapM Builder.word8 $ [Right 0x2E, get n]
+  LxiSpN n -> foldMapM Builder.word8 $ [Right 0x31, get n]
+  PushA -> Right $ Builder.word8 0xF5
+  PushL -> Right $ Builder.word8 0xE5
+  PushFL -> Right $ Builder.word8 0xED
+  PopA -> Right $ Builder.word8 0xF1
+  PopL -> Right $ Builder.word8 0xE1
+  PopFL -> Right $ Builder.word8 0xFD
+  In a -> foldMapM Builder.word8 $ [Right 0xDB, get a]
+  Out a -> foldMapM Builder.word8 $ [Right 0xD3, get a]
+  InrA -> Right $ Builder.word8 0x3C
+  InrL -> Right $ Builder.word8 0x2C
+  DcrA -> Right $ Builder.word8 0x3D
+  DcrL -> Right $ Builder.word8 0x2D
+  Add OpSrcReg -> Right $ Builder.word8 0x85
+  Add OpSrcMem -> Right $ Builder.word8 0x86
+  Add OpSrcAccu -> Right $ Builder.word8 0x87
+  Add (OpSrcConst n) -> foldMapM Builder.word8 $ [Right 0xC6, get n]
+  Sub OpSrcReg -> Right $ Builder.word8 0x95
+  Sub OpSrcMem -> Right $ Builder.word8 0x96
+  Sub OpSrcAccu -> Right $ Builder.word8 0x97
+  Sub (OpSrcConst n) -> foldMapM Builder.word8 $ [Right 0xD6, get n]
+  Cmp OpSrcReg -> Right $ Builder.word8 0xBD
+  Cmp OpSrcMem -> Right $ Builder.word8 0xBE
+  Cmp OpSrcAccu -> Right $ Builder.word8 0xBF
+  Cmp (OpSrcConst n) -> foldMapM Builder.word8 $ [Right 0xFE, get n]
+  And OpSrcReg -> Right $ Builder.word8 0xA5
+  And OpSrcMem -> Right $ Builder.word8 0xA6
+  And OpSrcAccu -> Right $ Builder.word8 0xA7
+  And (OpSrcConst n) -> foldMapM Builder.word8 $ [Right 0xE6, get n]
+  Or OpSrcReg -> Right $ Builder.word8 0xB5
+  Or OpSrcMem -> Right $ Builder.word8 0xB6
+  Or OpSrcAccu -> Right $ Builder.word8 0xB7
+  Or (OpSrcConst n) -> foldMapM Builder.word8 $ [Right 0xF6, get n]
+  Xor OpSrcReg -> Right $ Builder.word8 0xAD
+  Xor OpSrcMem -> Right $ Builder.word8 0xAE
+  Xor OpSrcAccu -> Right $ Builder.word8 0xAF
+  Xor (OpSrcConst n) -> foldMapM Builder.word8 $ [Right 0xEE, get n]
+  Jump BranchUncond a -> foldMapM Builder.word8 $ [Right 0xC3, get a]
+  Jump (BranchCondFlag BranchFlagZero FlagCondSet) a -> foldMapM Builder.word8 $ [Right 0xCA, get a]
+  Jump (BranchCondFlag BranchFlagZero FlagCondUnset) a -> foldMapM Builder.word8 $ [Right 0xC2, get a]
+  Jump (BranchCondFlag BranchFlagCarry FlagCondSet) a -> foldMapM Builder.word8 $ [Right 0xDA, get a]
+  Jump (BranchCondFlag BranchFlagCarry FlagCondUnset) a -> foldMapM Builder.word8 $ [Right 0xD2, get a]
+  Call BranchUncond a -> foldMapM Builder.word8 $ [Right 0xCD, get a]
+  Call (BranchCondFlag BranchFlagZero FlagCondSet) a -> foldMapM Builder.word8 $ [Right 0xCC, get a]
+  Call (BranchCondFlag BranchFlagZero FlagCondUnset) a -> foldMapM Builder.word8 $ [Right 0xC4, get a]
+  Call (BranchCondFlag BranchFlagCarry FlagCondSet) a -> foldMapM Builder.word8 $ [Right 0xDC, get a]
+  Call (BranchCondFlag BranchFlagCarry FlagCondUnset) a -> foldMapM Builder.word8 $ [Right 0xD4, get a]
+  Ret -> Right $ Builder.word8 0xC9
+  Halt -> Right $ Builder.word8 0x76
+  Nop -> Right $ Builder.word8 0x00
+  EnableI -> Right $ Builder.word8 0xFB
+  DisableI -> Right $ Builder.word8 0xF3
  where
   get = \case
-    KnownConst w -> w
-    LabelConst n off -> off + lblPos n
+    KnownConst w -> Right w
+    LabelConst n off -> case lblPos n of
+      Nothing -> Left n
+      Just pos -> Right $ pos + off
+
+foldMapM :: (Monoid m, Traversable t, Monad f) => (a -> m) -> t (f a) -> f m
+foldMapM f = fmap (foldMap f) . sequence
 
 size :: Instruction -> Word8
 size = \case
