@@ -412,6 +412,7 @@ unparseConstRef = \case
     mconcat
       [ "@"
       , Text.Lazy.Builder.fromText name
-      , "+"
-      , Text.Lazy.Builder.fromText $ Text.show off
+      , if off /= 0
+          then "+" <> Text.Lazy.Builder.fromText (Text.show off)
+          else mempty
       ]

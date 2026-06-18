@@ -1,3 +1,4 @@
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -10,6 +11,7 @@ import Control.Applicative (Alternative (empty, many))
 import Control.Monad (void)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
+import qualified Data.Char as Char
 import qualified Data.List as List
 import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
@@ -22,7 +24,7 @@ import Data.Word (Word8)
 import Data.Word8 (prettyHex)
 import Text.Megaparsec (ParseErrorBundle, Parsec, choice, eof, option, runParser, some)
 import Text.Megaparsec.Char (alphaNumChar, char, space1)
-import Text.Megaparsec.Char.Lexer (binary, decimal, hexadecimal, octal, skipLineComment, space, symbol')
+import Text.Megaparsec.Char.Lexer (binary, charLiteral, decimal, hexadecimal, octal, skipLineComment, space, symbol')
 
 type Parser = Parsec Void Text
 
@@ -31,6 +33,7 @@ data Decl
   | DeclOffset Word8
   | DeclInst Instruction
   | DeclBytes ByteString
+  deriving stock (Show)
 
 ignore :: Parser ()
 ignore = space space1 (skipLineComment ";") empty
@@ -47,6 +50,7 @@ number =
     [ "0x" *> hexadecimal
     , "0b" *> binary
     , "0o" *> octal
+    , "'" *> fmap (fromIntegral . Char.ord) charLiteral <* "'"
     , decimal
     ]
     <* ignore
@@ -72,8 +76,8 @@ parseConst =
               )
     ]
 
--- >>> program "hlt"
--- (Right (fromList [Halt]),fromList [])
+-- >>> program "jmp 'a'"
+-- Right (fromList [DeclInst (Jump BranchUncond (KnownConst 97))])
 
 program :: Text -> Either (ParseErrorBundle Text Void) (Seq Decl)
 program source = runParser file "<input>" source
